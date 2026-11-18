@@ -1,0 +1,571 @@
+{
+  "entities": {
+    "UserAccount": {
+      "title": "UserAccount",
+      "description": "Authenticated user account and RBAC role assignment.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "email": { "type": "string", "format": "email", "maxLength": 200 },
+        "displayName": { "type": "string", "maxLength": 120 },
+        "photoURL": { "type": "string", "maxLength": 500 },
+        "role": { "type": "string", "enum": ["admin", "manager", "member"] },
+        "memberId": { "type": "string", "maxLength": 128 },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["uid", "email", "displayName", "role", "isActive", "createdAt", "updatedAt"]
+    },
+    "MessSettings": {
+      "title": "MessSettings",
+      "description": "Global mess configuration, billing preferences, cutoff times, and mess rules.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "messName": { "type": "string", "maxLength": 120 },
+        "messAddress": { "type": "string", "maxLength": 250 },
+        "ownerName": { "type": "string", "maxLength": 120 },
+        "contactNumber": { "type": "string", "maxLength": 30 },
+        "billingCycleStartDay": { "type": "number" },
+        "defaultGuestCharge": { "type": "number" },
+        "guestMealCharge": { "type": "number" },
+        "mealCutoffTime": { "type": "string", "maxLength": 10 },
+        "messRules": { "type": "string", "maxLength": 4000 },
+        "currency": { "type": "string", "maxLength": 10 },
+        "defaultLanguage": { "type": "string", "enum": ["bn", "en"] },
+        "isSeeded": { "type": "boolean" },
+        "updatedAt": { "type": "string", "maxLength": 64 },
+        "updatedBy": { "type": "string", "maxLength": 128 }
+      },
+      "required": ["id", "messName", "billingCycleStartDay", "defaultGuestCharge", "currency", "defaultLanguage", "isSeeded", "updatedAt", "updatedBy"]
+    },
+    "Room": {
+      "title": "Room",
+      "description": "Room definition with seat capacity and monthly rent.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "roomNumber": { "type": "string", "maxLength": 40 },
+        "roomName": { "type": "string", "maxLength": 80 },
+        "totalSeats": { "type": "number" },
+        "monthlyRent": { "type": "number" },
+        "status": { "type": "string", "enum": ["available", "full", "maintenance"] },
+        "notes": { "type": "string", "maxLength": 300 },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 },
+        "createdBy": { "type": "string", "maxLength": 128 }
+      },
+      "required": ["id", "roomNumber", "totalSeats", "monthlyRent", "status", "createdAt", "updatedAt", "createdBy"]
+    },
+    "Member": {
+      "title": "Member",
+      "description": "Mess member profile and room/seat allocation.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "fullName": { "type": "string", "maxLength": 120 },
+        "fatherName": { "type": "string", "maxLength": 120 },
+        "mobile": { "type": "string", "maxLength": 30 },
+        "altMobile": { "type": "string", "maxLength": 30 },
+        "email": { "type": "string", "maxLength": 200 },
+        "permanentAddress": { "type": "string", "maxLength": 250 },
+        "presentAddress": { "type": "string", "maxLength": 250 },
+        "nidNumber": { "type": "string", "maxLength": 40 },
+        "emergencyContact": { "type": "string", "maxLength": 120 },
+        "joiningDate": { "type": "string", "maxLength": 32 },
+        "leavingDate": { "type": "string", "maxLength": 32 },
+        "roomId": { "type": "string", "maxLength": 128 },
+        "roomNumber": { "type": "string", "maxLength": 40 },
+        "seatNumber": { "type": "string", "maxLength": 20 },
+        "monthlyRent": { "type": "number" },
+        "advanceAmount": { "type": "number" },
+        "status": { "type": "string", "enum": ["active", "inactive", "archived"] },
+        "linkedUid": { "type": "string", "maxLength": 128 },
+        "photoUrl": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 },
+        "createdBy": { "type": "string", "maxLength": 128 }
+      },
+      "required": ["id", "fullName", "roomId", "roomNumber", "monthlyRent", "advanceAmount", "status", "createdAt", "updatedAt", "createdBy"]
+    },
+    "MealEntry": {
+      "title": "MealEntry",
+      "description": "Daily breakfast, lunch, and dinner meal entry per member.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "date": { "type": "string", "maxLength": 20 },
+        "monthKey": { "type": "string", "maxLength": 10 },
+        "memberId": { "type": "string", "maxLength": 128 },
+        "memberUid": { "type": "string", "maxLength": 128 },
+        "memberName": { "type": "string", "maxLength": 120 },
+        "breakfast": { "type": "number" },
+        "lunch": { "type": "number" },
+        "dinner": { "type": "number" },
+        "totalMeals": { "type": "number" },
+        "notes": { "type": "string", "maxLength": 250 },
+        "isLocked": { "type": "boolean" },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 },
+        "createdBy": { "type": "string", "maxLength": 128 }
+      },
+      "required": ["id", "date", "monthKey", "memberId", "memberName", "breakfast", "lunch", "dinner", "totalMeals", "isLocked", "createdAt", "updatedAt", "createdBy"]
+    },
+    "Expense": {
+      "title": "Expense",
+      "description": "Market or other mess expense record with voiding support.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "date": { "type": "string", "maxLength": 20 },
+        "monthKey": { "type": "string", "maxLength": 10 },
+        "expenseGroup": { "type": "string", "enum": ["market", "other"] },
+        "category": { "type": "string", "maxLength": 60 },
+        "itemName": { "type": "string", "maxLength": 160 },
+        "quantity": { "type": "number" },
+        "unit": { "type": "string", "maxLength": 30 },
+        "unitPrice": { "type": "number" },
+        "amount": { "type": "number" },
+        "paidByMemberId": { "type": "string", "maxLength": 128 },
+        "paidByName": { "type": "string", "maxLength": 120 },
+        "shopperName": { "type": "string", "maxLength": 120 },
+        "paymentMethod": { "type": "string", "enum": ["Cash", "bKash", "Nagad", "Rocket", "Bank Transfer"] },
+        "receiptUrl": { "type": "string", "maxLength": 100000 },
+        "notes": { "type": "string", "maxLength": 300 },
+        "isVoided": { "type": "boolean" },
+        "voidReason": { "type": "string", "maxLength": 200 },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 },
+        "createdBy": { "type": "string", "maxLength": 128 }
+      },
+      "required": ["id", "date", "monthKey", "expenseGroup", "category", "itemName", "amount", "paymentMethod", "isVoided", "createdAt", "updatedAt", "createdBy"]
+    },
+    "Payment": {
+      "title": "Payment",
+      "description": "Member deposit and payment record.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "memberId": { "type": "string", "maxLength": 128 },
+        "memberUid": { "type": "string", "maxLength": 128 },
+        "memberName": { "type": "string", "maxLength": 120 },
+        "monthKey": { "type": "string", "maxLength": 10 },
+        "paymentDate": { "type": "string", "maxLength": 20 },
+        "amount": { "type": "number" },
+        "paymentMethod": { "type": "string", "enum": ["Cash", "bKash", "Nagad", "Rocket", "Bank Transfer", "Other"] },
+        "transactionId": { "type": "string", "maxLength": 100 },
+        "receiptNo": { "type": "string", "maxLength": 60 },
+        "notes": { "type": "string", "maxLength": 300 },
+        "isVoided": { "type": "boolean" },
+        "voidReason": { "type": "string", "maxLength": 200 },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 },
+        "createdBy": { "type": "string", "maxLength": 128 }
+      },
+      "required": ["id", "memberId", "memberName", "monthKey", "paymentDate", "amount", "paymentMethod", "receiptNo", "isVoided", "createdAt", "updatedAt", "createdBy"]
+    },
+    "MonthlyClosing": {
+      "title": "MonthlyClosing",
+      "description": "Monthly accounting cycle lock and summary totals.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 20 },
+        "monthKey": { "type": "string", "maxLength": 10 },
+        "totalMarketCost": { "type": "number" },
+        "totalOtherCost": { "type": "number" },
+        "totalMeals": { "type": "number" },
+        "mealRate": { "type": "number" },
+        "otherChargePerMember": { "type": "number" },
+        "isClosed": { "type": "boolean" },
+        "closedAt": { "type": "string", "maxLength": 64 },
+        "closedBy": { "type": "string", "maxLength": 128 },
+        "notes": { "type": "string", "maxLength": 300 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "monthKey", "totalMarketCost", "totalOtherCost", "totalMeals", "mealRate", "otherChargePerMember", "isClosed", "updatedAt"]
+    },
+    "MonthlyBill": {
+      "title": "MonthlyBill",
+      "description": "Generated monthly bill statement per member.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 150 },
+        "monthKey": { "type": "string", "maxLength": 10 },
+        "memberId": { "type": "string", "maxLength": 128 },
+        "memberUid": { "type": "string", "maxLength": 128 },
+        "memberName": { "type": "string", "maxLength": 120 },
+        "totalMeals": { "type": "number" },
+        "mealRate": { "type": "number" },
+        "foodCost": { "type": "number" },
+        "roomRent": { "type": "number" },
+        "otherCharges": { "type": "number" },
+        "guestMealCost": { "type": "number" },
+        "totalBill": { "type": "number" },
+        "totalPaid": { "type": "number" },
+        "dueAmount": { "type": "number" },
+        "advanceAmount": { "type": "number" },
+        "isLocked": { "type": "boolean" },
+        "generatedAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 },
+        "generatedBy": { "type": "string", "maxLength": 128 }
+      },
+      "required": ["id", "monthKey", "memberId", "memberName", "totalMeals", "mealRate", "foodCost", "roomRent", "otherCharges", "totalBill", "totalPaid", "dueAmount", "advanceAmount", "isLocked", "generatedAt", "updatedAt", "generatedBy"]
+    },
+    "Guest": {
+      "title": "Guest",
+      "description": "Temporary mess guest stay and billing record.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "guestName": { "type": "string", "maxLength": 120 },
+        "mobile": { "type": "string", "maxLength": 30 },
+        "arrivalDate": { "type": "string", "maxLength": 20 },
+        "departureDate": { "type": "string", "maxLength": 20 },
+        "totalDays": { "type": "number" },
+        "roomId": { "type": "string", "maxLength": 128 },
+        "roomNumber": { "type": "string", "maxLength": 40 },
+        "dailyCharge": { "type": "number" },
+        "totalAmount": { "type": "number" },
+        "paidAmount": { "type": "number" },
+        "remainingDue": { "type": "number" },
+        "notes": { "type": "string", "maxLength": 300 },
+        "status": { "type": "string", "enum": ["staying", "checked_out"] },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 },
+        "createdBy": { "type": "string", "maxLength": 128 }
+      },
+      "required": ["id", "guestName", "arrivalDate", "totalDays", "dailyCharge", "totalAmount", "paidAmount", "remainingDue", "status", "createdAt", "updatedAt", "createdBy"]
+    },
+    "GuestPayment": {
+      "title": "GuestPayment",
+      "description": "Payment received from a mess guest.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "guestId": { "type": "string", "maxLength": 128 },
+        "guestName": { "type": "string", "maxLength": 120 },
+        "paymentDate": { "type": "string", "maxLength": 20 },
+        "amount": { "type": "number" },
+        "paymentMethod": { "type": "string", "enum": ["Cash", "bKash", "Nagad", "Rocket", "Bank Transfer"] },
+        "notes": { "type": "string", "maxLength": 250 },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "createdBy": { "type": "string", "maxLength": 128 }
+      },
+      "required": ["id", "guestId", "guestName", "paymentDate", "amount", "paymentMethod", "createdAt", "createdBy"]
+    },
+    "WeeklyMenu": {
+      "title": "WeeklyMenu",
+      "description": "Weekly food menu schedule by day.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 30 },
+        "dayOrder": { "type": "number" },
+        "dayNameBn": { "type": "string", "maxLength": 40 },
+        "dayNameEn": { "type": "string", "maxLength": 40 },
+        "breakfast": { "type": "string", "maxLength": 150 },
+        "lunch": { "type": "string", "maxLength": 150 },
+        "dinner": { "type": "string", "maxLength": 150 },
+        "specialNote": { "type": "string", "maxLength": 200 },
+        "updatedAt": { "type": "string", "maxLength": 64 },
+        "updatedBy": { "type": "string", "maxLength": 128 }
+      },
+      "required": ["id", "dayOrder", "dayNameBn", "dayNameEn", "breakfast", "lunch", "dinner", "updatedAt", "updatedBy"]
+    },
+    "Notice": {
+      "title": "Notice",
+      "description": "Mess announcement or notice board entry.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 160 },
+        "description": { "type": "string", "maxLength": 2000 },
+        "publishDate": { "type": "string", "maxLength": 20 },
+        "category": { "type": "string", "maxLength": 60 },
+        "isPinned": { "type": "boolean" },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 },
+        "createdBy": { "type": "string", "maxLength": 128 }
+      },
+      "required": ["id", "title", "description", "publishDate", "category", "isPinned", "createdAt", "updatedAt", "createdBy"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Immutable audit trail of financial and administrative actions.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "action": { "type": "string", "maxLength": 80 },
+        "entityType": { "type": "string", "maxLength": 60 },
+        "entityId": { "type": "string", "maxLength": 128 },
+        "summary": { "type": "string", "maxLength": 400 },
+        "actorUid": { "type": "string", "maxLength": 128 },
+        "actorName": { "type": "string", "maxLength": 120 },
+        "actorRole": { "type": "string", "maxLength": 30 },
+        "timestamp": { "type": "string", "maxLength": 64 },
+        "details": { "type": "string", "maxLength": 1000 }
+      },
+      "required": ["id", "action", "entityType", "entityId", "summary", "actorUid", "actorName", "actorRole", "timestamp"]
+    },
+    "SyncConflict": {
+      "title": "SyncConflict",
+      "description": "Offline-vs-cloud conflict record requiring admin resolution.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "entityType": { "type": "string", "maxLength": 60 },
+        "entityId": { "type": "string", "maxLength": 128 },
+        "localSummary": { "type": "string", "maxLength": 500 },
+        "serverSummary": { "type": "string", "maxLength": 500 },
+        "localPayloadJson": { "type": "string", "maxLength": 20000 },
+        "serverPayloadJson": { "type": "string", "maxLength": 20000 },
+        "detectedAt": { "type": "string", "maxLength": 64 },
+        "detectedBy": { "type": "string", "maxLength": 128 },
+        "status": { "type": "string", "enum": ["pending", "resolved_local", "resolved_server"] },
+        "resolvedBy": { "type": "string", "maxLength": 128 },
+        "resolvedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "entityType", "entityId", "localSummary", "serverSummary", "detectedAt", "detectedBy", "status"]
+    },
+    "MealRequest": {
+      "title": "MealRequest",
+      "description": "Member Meal On/Off request awaiting Manager/Owner approval.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 150 },
+        "memberId": { "type": "string", "maxLength": 128 },
+        "memberUid": { "type": "string", "maxLength": 128 },
+        "memberName": { "type": "string", "maxLength": 120 },
+        "date": { "type": "string", "maxLength": 20 },
+        "monthKey": { "type": "string", "maxLength": 10 },
+        "breakfast": { "type": "number" },
+        "lunch": { "type": "number" },
+        "dinner": { "type": "number" },
+        "reason": { "type": "string", "maxLength": 300 },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "reviewedBy": { "type": "string", "maxLength": 128 },
+        "reviewedAt": { "type": "string", "maxLength": 64 },
+        "reviewNote": { "type": "string", "maxLength": 250 },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "memberId", "memberUid", "memberName", "date", "monthKey", "breakfast", "lunch", "dinner", "status", "createdAt", "updatedAt"]
+    },
+    "PaymentRequest": {
+      "title": "PaymentRequest",
+      "description": "Member deposit submission awaiting Owner/Manager verification.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "memberId": { "type": "string", "maxLength": 128 },
+        "memberUid": { "type": "string", "maxLength": 128 },
+        "memberName": { "type": "string", "maxLength": 120 },
+        "monthKey": { "type": "string", "maxLength": 10 },
+        "amount": { "type": "number" },
+        "paymentDate": { "type": "string", "maxLength": 20 },
+        "paymentMethod": { "type": "string", "enum": ["Cash", "bKash", "Nagad", "Rocket", "Bank Transfer", "Other"] },
+        "transactionId": { "type": "string", "maxLength": 100 },
+        "receiptImageUrl": { "type": "string", "maxLength": 100000 },
+        "notes": { "type": "string", "maxLength": 300 },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "reviewedBy": { "type": "string", "maxLength": 128 },
+        "reviewedAt": { "type": "string", "maxLength": 64 },
+        "reviewNote": { "type": "string", "maxLength": 250 },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "memberId", "memberUid", "memberName", "monthKey", "amount", "paymentDate", "paymentMethod", "status", "createdAt", "updatedAt"]
+    },
+    "GuestMealRequest": {
+      "title": "GuestMealRequest",
+      "description": "Member request for temporary guest meals billed to their account on approval.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "memberId": { "type": "string", "maxLength": 128 },
+        "memberUid": { "type": "string", "maxLength": 128 },
+        "memberName": { "type": "string", "maxLength": 120 },
+        "guestName": { "type": "string", "maxLength": 120 },
+        "date": { "type": "string", "maxLength": 20 },
+        "monthKey": { "type": "string", "maxLength": 10 },
+        "breakfast": { "type": "number" },
+        "lunch": { "type": "number" },
+        "dinner": { "type": "number" },
+        "guestCount": { "type": "number" },
+        "unitCharge": { "type": "number" },
+        "totalCharge": { "type": "number" },
+        "notes": { "type": "string", "maxLength": 300 },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "reviewedBy": { "type": "string", "maxLength": 128 },
+        "reviewedAt": { "type": "string", "maxLength": 64 },
+        "reviewNote": { "type": "string", "maxLength": 250 },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "memberId", "memberUid", "memberName", "date", "monthKey", "breakfast", "lunch", "dinner", "guestCount", "unitCharge", "totalCharge", "status", "createdAt", "updatedAt"]
+    },
+    "Complaint": {
+      "title": "Complaint",
+      "description": "Private member complaint or suggestion visible only to submitter and Owner/Manager.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "memberId": { "type": "string", "maxLength": 128 },
+        "memberUid": { "type": "string", "maxLength": 128 },
+        "memberName": { "type": "string", "maxLength": 120 },
+        "category": { "type": "string", "maxLength": 80 },
+        "subject": { "type": "string", "maxLength": 160 },
+        "description": { "type": "string", "maxLength": 2000 },
+        "imageUrl": { "type": "string", "maxLength": 100000 },
+        "submittedDate": { "type": "string", "maxLength": 20 },
+        "status": { "type": "string", "enum": ["pending", "in_progress", "resolved"] },
+        "adminReply": { "type": "string", "maxLength": 1000 },
+        "repliedBy": { "type": "string", "maxLength": 128 },
+        "repliedAt": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "memberId", "memberUid", "memberName", "category", "subject", "description", "submittedDate", "status", "createdAt", "updatedAt"]
+    },
+    "MenuPoll": {
+      "title": "MenuPoll",
+      "description": "Food menu poll created by Owner/Manager for members to vote.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 160 },
+        "description": { "type": "string", "maxLength": 500 },
+        "options": { "type": "array" },
+        "deadline": { "type": "string", "maxLength": 32 },
+        "showResultsAfterVote": { "type": "boolean" },
+        "isClosed": { "type": "boolean" },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 },
+        "createdBy": { "type": "string", "maxLength": 128 }
+      },
+      "required": ["id", "title", "options", "deadline", "showResultsAfterVote", "isClosed", "createdAt", "updatedAt", "createdBy"]
+    },
+    "MenuVote": {
+      "title": "MenuVote",
+      "description": "Single vote per member per poll.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 260 },
+        "pollId": { "type": "string", "maxLength": 128 },
+        "uid": { "type": "string", "maxLength": 128 },
+        "memberId": { "type": "string", "maxLength": 128 },
+        "memberName": { "type": "string", "maxLength": 120 },
+        "optionIndex": { "type": "number" },
+        "optionLabel": { "type": "string", "maxLength": 120 },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "pollId", "uid", "memberName", "optionIndex", "optionLabel", "createdAt"]
+    },
+    "AppNotification": {
+      "title": "AppNotification",
+      "description": "In-app and PWA notification item.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "targetUid": { "type": "string", "maxLength": 128 },
+        "type": { "type": "string", "maxLength": 40 },
+        "title": { "type": "string", "maxLength": 160 },
+        "body": { "type": "string", "maxLength": 600 },
+        "readByUids": { "type": "array" },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "createdBy": { "type": "string", "maxLength": 128 }
+      },
+      "required": ["id", "targetUid", "type", "title", "body", "readByUids", "createdAt", "createdBy"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": {
+      "schema": { "$ref": "#/entities/UserAccount" },
+      "description": "User authentication profiles and RBAC roles."
+    },
+    "/messSettings/{messId}": {
+      "schema": { "$ref": "#/entities/MessSettings" },
+      "description": "Mess settings, cutoff times, rules, and billing cycle configuration."
+    },
+    "/rooms/{roomId}": {
+      "schema": { "$ref": "#/entities/Room" },
+      "description": "Mess rooms and seat capacities."
+    },
+    "/members/{memberId}": {
+      "schema": { "$ref": "#/entities/Member" },
+      "description": "Mess members and seat assignments."
+    },
+    "/mealEntries/{entryId}": {
+      "schema": { "$ref": "#/entities/MealEntry" },
+      "description": "Daily meal entries per member."
+    },
+    "/expenses/{expenseId}": {
+      "schema": { "$ref": "#/entities/Expense" },
+      "description": "Market and other mess expenses."
+    },
+    "/payments/{paymentId}": {
+      "schema": { "$ref": "#/entities/Payment" },
+      "description": "Member deposits and payment history."
+    },
+    "/monthlyClosings/{monthKey}": {
+      "schema": { "$ref": "#/entities/MonthlyClosing" },
+      "description": "Monthly accounting cycle summaries and close state."
+    },
+    "/monthlyBills/{billId}": {
+      "schema": { "$ref": "#/entities/MonthlyBill" },
+      "description": "Generated monthly bill per member."
+    },
+    "/guests/{guestId}": {
+      "schema": { "$ref": "#/entities/Guest" },
+      "description": "Temporary guest stays and charges."
+    },
+    "/guestPayments/{paymentId}": {
+      "schema": { "$ref": "#/entities/GuestPayment" },
+      "description": "Payments made by guests."
+    },
+    "/weeklyMenus/{dayId}": {
+      "schema": { "$ref": "#/entities/WeeklyMenu" },
+      "description": "Weekly food menu schedule."
+    },
+    "/notices/{noticeId}": {
+      "schema": { "$ref": "#/entities/Notice" },
+      "description": "Mess announcements and notices."
+    },
+    "/auditLogs/{logId}": {
+      "schema": { "$ref": "#/entities/AuditLog" },
+      "description": "Audit log of actions."
+    },
+    "/syncConflicts/{conflictId}": {
+      "schema": { "$ref": "#/entities/SyncConflict" },
+      "description": "Offline-vs-cloud sync conflicts for Admin review."
+    },
+    "/mealRequests/{requestId}": {
+      "schema": { "$ref": "#/entities/MealRequest" },
+      "description": "Member Meal On/Off requests."
+    },
+    "/paymentRequests/{requestId}": {
+      "schema": { "$ref": "#/entities/PaymentRequest" },
+      "description": "Member payment verification requests."
+    },
+    "/guestMealRequests/{requestId}": {
+      "schema": { "$ref": "#/entities/GuestMealRequest" },
+      "description": "Member guest meal requests."
+    },
+    "/complaints/{complaintId}": {
+      "schema": { "$ref": "#/entities/Complaint" },
+      "description": "Private complaints and suggestions."
+    },
+    "/menuPolls/{pollId}": {
+      "schema": { "$ref": "#/entities/MenuPoll" },
+      "description": "Menu voting polls."
+    },
+    "/menuVotes/{voteId}": {
+      "schema": { "$ref": "#/entities/MenuVote" },
+      "description": "Single vote per member per poll."
+    },
+    "/notifications/{notifId}": {
+      "schema": { "$ref": "#/entities/AppNotification" },
+      "description": "In-app and PWA notifications."
+    }
+  }
+}

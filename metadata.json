@@ -1,0 +1,8 @@
+{
+  "name": "Smart Mess Manager",
+  "description": "বাংলাদেশের ব্যাচেলর মেস ও ছাত্রাবাসের জন্য আধুনিক, অফলাইন-ফার্স্ট ডিজিটাল মেস ম্যানেজমেন্ট অ্যাপ — একটি মেস, একটি ডিজিটাল হিসাব ব্যবস্থা।",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

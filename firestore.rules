@@ -1,0 +1,798 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net: Default-deny all paths
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ------------------------------------------------------------------
+    // Global Hardened Helper Primitives
+    // ------------------------------------------------------------------
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 260 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isBootstrappedAdmin() {
+      return isVerified() && request.auth.token.email == 'mdraezul96@gmail.com';
+    }
+
+    function userDocExists(uid) {
+      return exists(/databases/$(database)/documents/users/$(uid));
+    }
+
+    function getUserRole() {
+      return userDocExists(request.auth.uid)
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+        : 'member';
+    }
+
+    function isAdmin() {
+      return isBootstrappedAdmin() || (
+        isVerified() &&
+        userDocExists(request.auth.uid) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isActive == true &&
+        getUserRole() == 'admin'
+      );
+    }
+
+    function isManagerOrAdmin() {
+      return isBootstrappedAdmin() || (
+        isVerified() &&
+        userDocExists(request.auth.uid) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isActive == true &&
+        (getUserRole() == 'admin' || getUserRole() == 'manager')
+      );
+    }
+
+    function isActiveMessUser() {
+      return isBootstrappedAdmin() || (
+        isVerified() &&
+        userDocExists(request.auth.uid) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isActive == true
+      );
+    }
+
+    function isBoundedUidList(arr, maxLen) {
+      return arr is list && arr.size() <= maxLen && (arr.size() == 0 || arr[0] is string);
+    }
+
+    function isValidStr(val, minLen, maxLen) {
+      return val is string && val.size() >= minLen && val.size() <= maxLen;
+    }
+
+    function isValidPaymentMethod(val) {
+      return val in ['Cash', 'bKash', 'Nagad', 'Rocket', 'Bank Transfer', 'Other'];
+    }
+
+    // ------------------------------------------------------------------
+    // Entity Validation Blueprints
+    // ------------------------------------------------------------------
+    function isValidUserAccount(data) {
+      return data.keys().hasAll(['uid', 'email', 'displayName', 'role', 'isActive', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'email', 'displayName', 'photoURL', 'role', 'memberId', 'isActive', 'managerUids', 'createdAt', 'updatedAt'])
+        && isValidStr(data.uid, 1, 128)
+        && isValidStr(data.email, 3, 200)
+        && isValidStr(data.displayName, 1, 120)
+        && (!('photoURL' in data) || isValidStr(data.photoURL, 0, 500))
+        && data.role in ['admin', 'manager', 'member']
+        && (!('memberId' in data) || isValidStr(data.memberId, 0, 128))
+        && data.isActive is bool
+        && (!('managerUids' in data) || isBoundedUidList(data.managerUids, 20))
+        && isValidStr(data.createdAt, 1, 64)
+        && isValidStr(data.updatedAt, 1, 64);
+    }
+
+    function isValidMessSettings(data) {
+      return data.keys().hasAll(['id', 'messName', 'billingCycleStartDay', 'defaultGuestCharge', 'currency', 'defaultLanguage', 'isSeeded', 'updatedAt', 'updatedBy'])
+        && data.keys().hasOnly(['id', 'messName', 'messAddress', 'ownerName', 'contactNumber', 'billingCycleStartDay', 'defaultGuestCharge', 'guestMealCharge', 'mealCutoffTime', 'messRules', 'currency', 'defaultLanguage', 'isSeeded', 'managerUids', 'readerUids', 'updatedAt', 'updatedBy'])
+        && isValidStr(data.id, 1, 128)
+        && isValidStr(data.messName, 1, 120)
+        && (!('messAddress' in data) || isValidStr(data.messAddress, 0, 250))
+        && (!('ownerName' in data) || isValidStr(data.ownerName, 0, 120))
+        && (!('contactNumber' in data) || isValidStr(data.contactNumber, 0, 30))
+        && data.billingCycleStartDay is number && data.billingCycleStartDay >= 1 && data.billingCycleStartDay <= 28
+        && data.defaultGuestCharge is number && data.defaultGuestCharge >= 0
+        && (!('guestMealCharge' in data) || (data.guestMealCharge is number && data.guestMealCharge >= 0))
+        && (!('mealCutoffTime' in data) || isValidStr(data.mealCutoffTime, 0, 10))
+        && (!('messRules' in data) || isValidStr(data.messRules, 0, 4000))
+        && isValidStr(data.currency, 1, 10)
+        && data.defaultLanguage in ['bn', 'en']
+        && data.isSeeded is bool
+        && (!('managerUids' in data) || isBoundedUidList(data.managerUids, 20))
+        && (!('readerUids' in data) || isBoundedUidList(data.readerUids, 50))
+        && isValidStr(data.updatedAt, 1, 64)
+        && isValidStr(data.updatedBy, 1, 128);
+    }
+
+    function isValidRoom(data) {
+      return data.keys().hasAll(['id', 'roomNumber', 'totalSeats', 'monthlyRent', 'status', 'createdAt', 'updatedAt', 'createdBy'])
+        && data.keys().hasOnly(['id', 'roomNumber', 'roomName', 'totalSeats', 'monthlyRent', 'status', 'notes', 'managerUids', 'readerUids', 'createdAt', 'updatedAt', 'createdBy'])
+        && isValidStr(data.id, 1, 128)
+        && isValidStr(data.roomNumber, 1, 40)
+        && (!('roomName' in data) || isValidStr(data.roomName, 0, 80))
+        && data.totalSeats is number && data.totalSeats >= 1 && data.totalSeats <= 30
+        && data.monthlyRent is number && data.monthlyRent >= 0
+        && data.status in ['available', 'full', 'maintenance']
+        && (!('notes' in data) || isValidStr(data.notes, 0, 300))
+        && (!('managerUids' in data) || isBoundedUidList(data.managerUids, 20))
+        && (!('readerUids' in data) || isBoundedUidList(data.readerUids, 50))
+        && isValidStr(data.createdAt, 1, 64)
+        && isValidStr(data.updatedAt, 1, 64)
+        && isValidStr(data.createdBy, 1, 128);
+    }
+
+    function isValidMember(data) {
+      return data.keys().hasAll(['id', 'fullName', 'roomId', 'roomNumber', 'monthlyRent', 'advanceAmount', 'status', 'createdAt', 'updatedAt', 'createdBy'])
+        && data.keys().hasOnly(['id', 'fullName', 'fatherName', 'mobile', 'altMobile', 'email', 'permanentAddress', 'presentAddress', 'nidNumber', 'emergencyContact', 'joiningDate', 'leavingDate', 'roomId', 'roomNumber', 'seatNumber', 'monthlyRent', 'advanceAmount', 'status', 'linkedUid', 'photoUrl', 'managerUids', 'createdAt', 'updatedAt', 'createdBy'])
+        && isValidStr(data.id, 1, 128)
+        && isValidStr(data.fullName, 1, 120)
+        && (!('fatherName' in data) || isValidStr(data.fatherName, 0, 120))
+        && (!('mobile' in data) || isValidStr(data.mobile, 0, 30))
+        && (!('altMobile' in data) || isValidStr(data.altMobile, 0, 30))
+        && (!('email' in data) || isValidStr(data.email, 0, 200))
+        && (!('permanentAddress' in data) || isValidStr(data.permanentAddress, 0, 250))
+        && (!('presentAddress' in data) || isValidStr(data.presentAddress, 0, 250))
+        && (!('nidNumber' in data) || isValidStr(data.nidNumber, 0, 40))
+        && (!('emergencyContact' in data) || isValidStr(data.emergencyContact, 0, 120))
+        && (!('joiningDate' in data) || isValidStr(data.joiningDate, 0, 32))
+        && (!('leavingDate' in data) || isValidStr(data.leavingDate, 0, 32))
+        && isValidStr(data.roomId, 1, 128)
+        && isValidStr(data.roomNumber, 1, 40)
+        && (!('seatNumber' in data) || isValidStr(data.seatNumber, 0, 20))
+        && data.monthlyRent is number && data.monthlyRent >= 0
+        && data.advanceAmount is number && data.advanceAmount >= 0
+        && data.status in ['active', 'inactive', 'archived']
+        && (!('linkedUid' in data) || isValidStr(data.linkedUid, 0, 128))
+        && (!('photoUrl' in data) || isValidStr(data.photoUrl, 0, 500))
+        && (!('managerUids' in data) || isBoundedUidList(data.managerUids, 20))
+        && isValidStr(data.createdAt, 1, 64)
+        && isValidStr(data.updatedAt, 1, 64)
+        && isValidStr(data.createdBy, 1, 128);
+    }
+
+    function isValidMealEntry(data) {
+      return data.keys().hasAll(['id', 'date', 'monthKey', 'memberId', 'memberName', 'breakfast', 'lunch', 'dinner', 'totalMeals', 'isLocked', 'createdAt', 'updatedAt', 'createdBy'])
+        && data.keys().hasOnly(['id', 'date', 'monthKey', 'memberId', 'memberUid', 'memberName', 'breakfast', 'lunch', 'dinner', 'totalMeals', 'notes', 'isLocked', 'managerUids', 'readerUids', 'createdAt', 'updatedAt', 'createdBy'])
+        && isValidStr(data.id, 1, 128)
+        && isValidStr(data.date, 8, 20)
+        && isValidStr(data.monthKey, 7, 10)
+        && isValidStr(data.memberId, 1, 128)
+        && (!('memberUid' in data) || isValidStr(data.memberUid, 0, 128))
+        && isValidStr(data.memberName, 1, 120)
+        && data.breakfast is number && data.breakfast >= 0 && data.breakfast <= 20
+        && data.lunch is number && data.lunch >= 0 && data.lunch <= 20
+        && data.dinner is number && data.dinner >= 0 && data.dinner <= 20
+        && data.totalMeals is number && data.totalMeals >= 0 && data.totalMeals <= 60
+        && (!('notes' in data) || isValidStr(data.notes, 0, 250))
+        && data.isLocked is bool
+        && (!('managerUids' in data) || isBoundedUidList(data.managerUids, 20))
+        && (!('readerUids' in data) || isBoundedUidList(data.readerUids, 50))
+        && isValidStr(data.createdAt, 1, 64)
+        && isValidStr(data.updatedAt, 1, 64)
+        && isValidStr(data.createdBy, 1, 128);
+    }
+
+    function isValidExpense(data) {
+      return data.keys().hasAll(['id', 'date', 'monthKey', 'expenseGroup', 'category', 'itemName', 'amount', 'paymentMethod', 'isVoided', 'createdAt', 'updatedAt', 'createdBy'])
+        && data.keys().hasOnly(['id', 'date', 'monthKey', 'expenseGroup', 'category', 'itemName', 'quantity', 'unit', 'unitPrice', 'amount', 'paidByMemberId', 'paidByName', 'shopperName', 'paymentMethod', 'receiptUrl', 'notes', 'isVoided', 'voidReason', 'managerUids', 'readerUids', 'createdAt', 'updatedAt', 'createdBy'])
+        && isValidStr(data.id, 1, 128)
+        && isValidStr(data.date, 8, 20)
+        && isValidStr(data.monthKey, 7, 10)
+        && data.expenseGroup in ['market', 'other']
+        && isValidStr(data.category, 1, 60)
+        && isValidStr(data.itemName, 1, 160)
+        && (!('quantity' in data) || (data.quantity is number && data.quantity >= 0))
+        && (!('unit' in data) || isValidStr(data.unit, 0, 30))
+        && (!('unitPrice' in data) || (data.unitPrice is number && data.unitPrice >= 0))
+        && data.amount is number && data.amount >= 0
+        && (!('paidByMemberId' in data) || isValidStr(data.paidByMemberId, 0, 128))
+        && (!('paidByName' in data) || isValidStr(data.paidByName, 0, 120))
+        && (!('shopperName' in data) || isValidStr(data.shopperName, 0, 120))
+        && isValidPaymentMethod(data.paymentMethod)
+        && (!('receiptUrl' in data) || isValidStr(data.receiptUrl, 0, 100000))
+        && (!('notes' in data) || isValidStr(data.notes, 0, 300))
+        && data.isVoided is bool
+        && (!('voidReason' in data) || isValidStr(data.voidReason, 0, 200))
+        && (!('managerUids' in data) || isBoundedUidList(data.managerUids, 20))
+        && (!('readerUids' in data) || isBoundedUidList(data.readerUids, 50))
+        && isValidStr(data.createdAt, 1, 64)
+        && isValidStr(data.updatedAt, 1, 64)
+        && isValidStr(data.createdBy, 1, 128);
+    }
+
+    function isValidPayment(data) {
+      return data.keys().hasAll(['id', 'memberId', 'memberName', 'monthKey', 'paymentDate', 'amount', 'paymentMethod', 'receiptNo', 'isVoided', 'createdAt', 'updatedAt', 'createdBy'])
+        && data.keys().hasOnly(['id', 'memberId', 'memberUid', 'memberName', 'monthKey', 'paymentDate', 'amount', 'paymentMethod', 'transactionId', 'receiptNo', 'notes', 'isVoided', 'voidReason', 'managerUids', 'createdAt', 'updatedAt', 'createdBy'])
+        && isValidStr(data.id, 1, 128)
+        && isValidStr(data.memberId, 1, 128)
+        && (!('memberUid' in data) || isValidStr(data.memberUid, 0, 128))
+        && isValidStr(data.memberName, 1, 120)
+        && isValidStr(data.monthKey, 7, 10)
+        && isValidStr(data.paymentDate, 8, 20)
+        && data.amount is number && data.amount > 0
+        && isValidPaymentMethod(data.paymentMethod)
+        && (!('transactionId' in data) || isValidStr(data.transactionId, 0, 100))
+        && isValidStr(data.receiptNo, 1, 60)
+        && (!('notes' in data) || isValidStr(data.notes, 0, 300))
+        && data.isVoided is bool
+        && (!('voidReason' in data) || isValidStr(data.voidReason, 0, 200))
+        && (!('managerUids' in data) || isBoundedUidList(data.managerUids, 20))
+        && isValidStr(data.createdAt, 1, 64)
+        && isValidStr(data.updatedAt, 1, 64)
+        && isValidStr(data.createdBy, 1, 128);
+    }
+
+    function isValidMonthlyClosing(data) {
+      return data.keys().hasAll(['id', 'monthKey', 'totalMarketCost', 'totalOtherCost', 'totalMeals', 'mealRate', 'otherChargePerMember', 'isClosed', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'monthKey', 'totalMarketCost', 'totalOtherCost', 'totalMeals', 'mealRate', 'otherChargePerMember', 'isClosed', 'closedAt', 'closedBy', 'notes', 'managerUids', 'readerUids', 'updatedAt'])
+        && isValidStr(data.id, 7, 20)
+        && isValidStr(data.monthKey, 7, 10)
+        && data.totalMarketCost is number && data.totalMarketCost >= 0
+        && data.totalOtherCost is number && data.totalOtherCost >= 0
+        && data.totalMeals is number && data.totalMeals >= 0
+        && data.mealRate is number && data.mealRate >= 0
+        && data.otherChargePerMember is number && data.otherChargePerMember >= 0
+        && data.isClosed is bool
+        && (!('closedAt' in data) || isValidStr(data.closedAt, 0, 64))
+        && (!('closedBy' in data) || isValidStr(data.closedBy, 0, 128))
+        && (!('notes' in data) || isValidStr(data.notes, 0, 300))
+        && (!('managerUids' in data) || isBoundedUidList(data.managerUids, 20))
+        && (!('readerUids' in data) || isBoundedUidList(data.readerUids, 50))
+        && isValidStr(data.updatedAt, 1, 64);
+    }
+
+    function isValidMonthlyBill(data) {
+      return data.keys().hasAll(['id', 'monthKey', 'memberId', 'memberName', 'totalMeals', 'mealRate', 'foodCost', 'roomRent', 'otherCharges', 'totalBill', 'totalPaid', 'dueAmount', 'advanceAmount', 'isLocked', 'generatedAt', 'updatedAt', 'generatedBy'])
+        && data.keys().hasOnly(['id', 'monthKey', 'memberId', 'memberUid', 'memberName', 'totalMeals', 'mealRate', 'foodCost', 'roomRent', 'otherCharges', 'guestMealCost', 'totalBill', 'totalPaid', 'dueAmount', 'advanceAmount', 'isLocked', 'managerUids', 'generatedAt', 'updatedAt', 'generatedBy'])
+        && isValidStr(data.id, 1, 150)
+        && isValidStr(data.monthKey, 7, 10)
+        && isValidStr(data.memberId, 1, 128)
+        && (!('memberUid' in data) || isValidStr(data.memberUid, 0, 128))
+        && isValidStr(data.memberName, 1, 120)
+        && data.totalMeals is number && data.totalMeals >= 0
+        && data.mealRate is number && data.mealRate >= 0
+        && data.foodCost is number && data.foodCost >= 0
+        && data.roomRent is number && data.roomRent >= 0
+        && data.otherCharges is number && data.otherCharges >= 0
+        && (!('guestMealCost' in data) || (data.guestMealCost is number && data.guestMealCost >= 0))
+        && data.totalBill is number && data.totalBill >= 0
+        && data.totalPaid is number && data.totalPaid >= 0
+        && data.dueAmount is number && data.dueAmount >= 0
+        && data.advanceAmount is number && data.advanceAmount >= 0
+        && data.isLocked is bool
+        && (!('managerUids' in data) || isBoundedUidList(data.managerUids, 20))
+        && isValidStr(data.generatedAt, 1, 64)
+        && isValidStr(data.updatedAt, 1, 64)
+        && isValidStr(data.generatedBy, 1, 128);
+    }
+
+    function isValidGuest(data) {
+      return data.keys().hasAll(['id', 'guestName', 'arrivalDate', 'totalDays', 'dailyCharge', 'totalAmount', 'paidAmount', 'remainingDue', 'status', 'createdAt', 'updatedAt', 'createdBy'])
+        && data.keys().hasOnly(['id', 'guestName', 'mobile', 'arrivalDate', 'departureDate', 'totalDays', 'roomId', 'roomNumber', 'dailyCharge', 'totalAmount', 'paidAmount', 'remainingDue', 'notes', 'status', 'managerUids', 'createdAt', 'updatedAt', 'createdBy'])
+        && isValidStr(data.id, 1, 128)
+        && isValidStr(data.guestName, 1, 120)
+        && (!('mobile' in data) || isValidStr(data.mobile, 0, 30))
+        && isValidStr(data.arrivalDate, 8, 20)
+        && (!('departureDate' in data) || isValidStr(data.departureDate, 0, 20))
+        && data.totalDays is number && data.totalDays >= 1
+        && (!('roomId' in data) || isValidStr(data.roomId, 0, 128))
+        && (!('roomNumber' in data) || isValidStr(data.roomNumber, 0, 40))
+        && data.dailyCharge is number && data.dailyCharge >= 0
+        && data.totalAmount is number && data.totalAmount >= 0
+        && data.paidAmount is number && data.paidAmount >= 0
+        && data.remainingDue is number && data.remainingDue >= 0
+        && (!('notes' in data) || isValidStr(data.notes, 0, 300))
+        && data.status in ['staying', 'checked_out']
+        && (!('managerUids' in data) || isBoundedUidList(data.managerUids, 20))
+        && isValidStr(data.createdAt, 1, 64)
+        && isValidStr(data.updatedAt, 1, 64)
+        && isValidStr(data.createdBy, 1, 128);
+    }
+
+    function isValidGuestPayment(data) {
+      return data.keys().hasAll(['id', 'guestId', 'guestName', 'paymentDate', 'amount', 'paymentMethod', 'createdAt', 'createdBy'])
+        && data.keys().hasOnly(['id', 'guestId', 'guestName', 'paymentDate', 'amount', 'paymentMethod', 'notes', 'managerUids', 'createdAt', 'createdBy'])
+        && isValidStr(data.id, 1, 128)
+        && isValidStr(data.guestId, 1, 128)
+        && isValidStr(data.guestName, 1, 120)
+        && isValidStr(data.paymentDate, 8, 20)
+        && data.amount is number && data.amount > 0
+        && isValidPaymentMethod(data.paymentMethod)
+        && (!('notes' in data) || isValidStr(data.notes, 0, 250))
+        && (!('managerUids' in data) || isBoundedUidList(data.managerUids, 20))
+        && isValidStr(data.createdAt, 1, 64)
+        && isValidStr(data.createdBy, 1, 128);
+    }
+
+    function isValidWeeklyMenu(data) {
+      return data.keys().hasAll(['id', 'dayOrder', 'dayNameBn', 'dayNameEn', 'breakfast', 'lunch', 'dinner', 'updatedAt', 'updatedBy'])
+        && data.keys().hasOnly(['id', 'dayOrder', 'dayNameBn', 'dayNameEn', 'breakfast', 'lunch', 'dinner', 'specialNote', 'managerUids', 'readerUids', 'updatedAt', 'updatedBy'])
+        && isValidStr(data.id, 1, 30)
+        && data.dayOrder is number && data.dayOrder >= 0 && data.dayOrder <= 6
+        && isValidStr(data.dayNameBn, 1, 40)
+        && isValidStr(data.dayNameEn, 1, 40)
+        && isValidStr(data.breakfast, 0, 150)
+        && isValidStr(data.lunch, 0, 150)
+        && isValidStr(data.dinner, 0, 150)
+        && (!('specialNote' in data) || isValidStr(data.specialNote, 0, 200))
+        && (!('managerUids' in data) || isBoundedUidList(data.managerUids, 20))
+        && (!('readerUids' in data) || isBoundedUidList(data.readerUids, 50))
+        && isValidStr(data.updatedAt, 1, 64)
+        && isValidStr(data.updatedBy, 1, 128);
+    }
+
+    function isValidNotice(data) {
+      return data.keys().hasAll(['id', 'title', 'description', 'publishDate', 'category', 'isPinned', 'createdAt', 'updatedAt', 'createdBy'])
+        && data.keys().hasOnly(['id', 'title', 'description', 'publishDate', 'category', 'isPinned', 'managerUids', 'readerUids', 'createdAt', 'updatedAt', 'createdBy'])
+        && isValidStr(data.id, 1, 128)
+        && isValidStr(data.title, 1, 160)
+        && isValidStr(data.description, 1, 2000)
+        && isValidStr(data.publishDate, 8, 20)
+        && isValidStr(data.category, 1, 60)
+        && data.isPinned is bool
+        && (!('managerUids' in data) || isBoundedUidList(data.managerUids, 20))
+        && (!('readerUids' in data) || isBoundedUidList(data.readerUids, 50))
+        && isValidStr(data.createdAt, 1, 64)
+        && isValidStr(data.updatedAt, 1, 64)
+        && isValidStr(data.createdBy, 1, 128);
+    }
+
+    function isValidAuditLog(data) {
+      return data.keys().hasAll(['id', 'action', 'entityType', 'entityId', 'summary', 'actorUid', 'actorName', 'actorRole', 'timestamp'])
+        && data.keys().hasOnly(['id', 'action', 'entityType', 'entityId', 'summary', 'actorUid', 'actorName', 'actorRole', 'timestamp', 'details', 'managerUids'])
+        && isValidStr(data.id, 1, 128)
+        && isValidStr(data.action, 1, 80)
+        && isValidStr(data.entityType, 1, 60)
+        && isValidStr(data.entityId, 1, 128)
+        && isValidStr(data.summary, 1, 400)
+        && isValidStr(data.actorUid, 1, 128)
+        && isValidStr(data.actorName, 1, 120)
+        && isValidStr(data.actorRole, 1, 30)
+        && isValidStr(data.timestamp, 1, 64)
+        && (!('details' in data) || isValidStr(data.details, 0, 1000))
+        && (!('managerUids' in data) || isBoundedUidList(data.managerUids, 20));
+    }
+
+    function isValidSyncConflict(data) {
+      return data.keys().hasAll(['id', 'entityType', 'entityId', 'localSummary', 'serverSummary', 'detectedAt', 'detectedBy', 'status'])
+        && data.keys().hasOnly(['id', 'entityType', 'entityId', 'localSummary', 'serverSummary', 'localPayloadJson', 'serverPayloadJson', 'detectedAt', 'detectedBy', 'status', 'resolvedBy', 'resolvedAt', 'managerUids'])
+        && isValidStr(data.id, 1, 128)
+        && isValidStr(data.entityType, 1, 60)
+        && isValidStr(data.entityId, 1, 128)
+        && isValidStr(data.localSummary, 1, 500)
+        && isValidStr(data.serverSummary, 1, 500)
+        && (!('localPayloadJson' in data) || isValidStr(data.localPayloadJson, 0, 20000))
+        && (!('serverPayloadJson' in data) || isValidStr(data.serverPayloadJson, 0, 20000))
+        && isValidStr(data.detectedAt, 1, 64)
+        && isValidStr(data.detectedBy, 1, 128)
+        && data.status in ['pending', 'resolved_local', 'resolved_server']
+        && (!('resolvedBy' in data) || isValidStr(data.resolvedBy, 0, 128))
+        && (!('resolvedAt' in data) || isValidStr(data.resolvedAt, 0, 64))
+        && (!('managerUids' in data) || isBoundedUidList(data.managerUids, 20));
+    }
+
+    function isValidMealRequest(data) {
+      return data.keys().hasAll(['id', 'memberId', 'memberUid', 'memberName', 'date', 'monthKey', 'breakfast', 'lunch', 'dinner', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'memberId', 'memberUid', 'memberName', 'date', 'monthKey', 'breakfast', 'lunch', 'dinner', 'reason', 'status', 'reviewedBy', 'reviewedAt', 'reviewNote', 'managerUids', 'createdAt', 'updatedAt'])
+        && isValidStr(data.id, 1, 150)
+        && isValidStr(data.memberId, 1, 128)
+        && isValidStr(data.memberUid, 1, 128)
+        && isValidStr(data.memberName, 1, 120)
+        && isValidStr(data.date, 8, 20)
+        && isValidStr(data.monthKey, 7, 10)
+        && data.breakfast is number && data.breakfast >= 0 && data.breakfast <= 5
+        && data.lunch is number && data.lunch >= 0 && data.lunch <= 5
+        && data.dinner is number && data.dinner >= 0 && data.dinner <= 5
+        && (!('reason' in data) || isValidStr(data.reason, 0, 300))
+        && data.status in ['pending', 'approved', 'rejected']
+        && (!('reviewedBy' in data) || isValidStr(data.reviewedBy, 0, 128))
+        && (!('reviewedAt' in data) || isValidStr(data.reviewedAt, 0, 64))
+        && (!('reviewNote' in data) || isValidStr(data.reviewNote, 0, 250))
+        && (!('managerUids' in data) || isBoundedUidList(data.managerUids, 20))
+        && isValidStr(data.createdAt, 1, 64)
+        && isValidStr(data.updatedAt, 1, 64);
+    }
+
+    function isValidPaymentRequest(data) {
+      return data.keys().hasAll(['id', 'memberId', 'memberUid', 'memberName', 'monthKey', 'amount', 'paymentDate', 'paymentMethod', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'memberId', 'memberUid', 'memberName', 'monthKey', 'amount', 'paymentDate', 'paymentMethod', 'transactionId', 'receiptImageUrl', 'notes', 'status', 'reviewedBy', 'reviewedAt', 'reviewNote', 'managerUids', 'createdAt', 'updatedAt'])
+        && isValidStr(data.id, 1, 128)
+        && isValidStr(data.memberId, 1, 128)
+        && isValidStr(data.memberUid, 1, 128)
+        && isValidStr(data.memberName, 1, 120)
+        && isValidStr(data.monthKey, 7, 10)
+        && data.amount is number && data.amount > 0
+        && isValidStr(data.paymentDate, 8, 20)
+        && isValidPaymentMethod(data.paymentMethod)
+        && (!('transactionId' in data) || isValidStr(data.transactionId, 0, 100))
+        && (!('receiptImageUrl' in data) || isValidStr(data.receiptImageUrl, 0, 100000))
+        && (!('notes' in data) || isValidStr(data.notes, 0, 300))
+        && data.status in ['pending', 'approved', 'rejected']
+        && (!('reviewedBy' in data) || isValidStr(data.reviewedBy, 0, 128))
+        && (!('reviewedAt' in data) || isValidStr(data.reviewedAt, 0, 64))
+        && (!('reviewNote' in data) || isValidStr(data.reviewNote, 0, 250))
+        && (!('managerUids' in data) || isBoundedUidList(data.managerUids, 20))
+        && isValidStr(data.createdAt, 1, 64)
+        && isValidStr(data.updatedAt, 1, 64);
+    }
+
+    function isValidGuestMealRequest(data) {
+      return data.keys().hasAll(['id', 'memberId', 'memberUid', 'memberName', 'date', 'monthKey', 'breakfast', 'lunch', 'dinner', 'guestCount', 'unitCharge', 'totalCharge', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'memberId', 'memberUid', 'memberName', 'guestName', 'date', 'monthKey', 'breakfast', 'lunch', 'dinner', 'guestCount', 'unitCharge', 'totalCharge', 'notes', 'status', 'reviewedBy', 'reviewedAt', 'reviewNote', 'managerUids', 'createdAt', 'updatedAt'])
+        && isValidStr(data.id, 1, 128)
+        && isValidStr(data.memberId, 1, 128)
+        && isValidStr(data.memberUid, 1, 128)
+        && isValidStr(data.memberName, 1, 120)
+        && (!('guestName' in data) || isValidStr(data.guestName, 0, 120))
+        && isValidStr(data.date, 8, 20)
+        && isValidStr(data.monthKey, 7, 10)
+        && data.breakfast is number && data.breakfast >= 0 && data.breakfast <= 1
+        && data.lunch is number && data.lunch >= 0 && data.lunch <= 1
+        && data.dinner is number && data.dinner >= 0 && data.dinner <= 1
+        && data.guestCount is number && data.guestCount >= 1 && data.guestCount <= 30
+        && data.unitCharge is number && data.unitCharge >= 0
+        && data.totalCharge is number && data.totalCharge >= 0
+        && (!('notes' in data) || isValidStr(data.notes, 0, 300))
+        && data.status in ['pending', 'approved', 'rejected']
+        && (!('reviewedBy' in data) || isValidStr(data.reviewedBy, 0, 128))
+        && (!('reviewedAt' in data) || isValidStr(data.reviewedAt, 0, 64))
+        && (!('reviewNote' in data) || isValidStr(data.reviewNote, 0, 250))
+        && (!('managerUids' in data) || isBoundedUidList(data.managerUids, 20))
+        && isValidStr(data.createdAt, 1, 64)
+        && isValidStr(data.updatedAt, 1, 64);
+    }
+
+    function isValidComplaint(data) {
+      return data.keys().hasAll(['id', 'memberId', 'memberUid', 'memberName', 'category', 'subject', 'description', 'submittedDate', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'memberId', 'memberUid', 'memberName', 'category', 'subject', 'description', 'imageUrl', 'submittedDate', 'status', 'adminReply', 'repliedBy', 'repliedAt', 'managerUids', 'createdAt', 'updatedAt'])
+        && isValidStr(data.id, 1, 128)
+        && isValidStr(data.memberId, 1, 128)
+        && isValidStr(data.memberUid, 1, 128)
+        && isValidStr(data.memberName, 1, 120)
+        && isValidStr(data.category, 1, 80)
+        && isValidStr(data.subject, 1, 160)
+        && isValidStr(data.description, 1, 2000)
+        && (!('imageUrl' in data) || isValidStr(data.imageUrl, 0, 100000))
+        && isValidStr(data.submittedDate, 8, 20)
+        && data.status in ['pending', 'in_progress', 'resolved']
+        && (!('adminReply' in data) || isValidStr(data.adminReply, 0, 1000))
+        && (!('repliedBy' in data) || isValidStr(data.repliedBy, 0, 128))
+        && (!('repliedAt' in data) || isValidStr(data.repliedAt, 0, 64))
+        && (!('managerUids' in data) || isBoundedUidList(data.managerUids, 20))
+        && isValidStr(data.createdAt, 1, 64)
+        && isValidStr(data.updatedAt, 1, 64);
+    }
+
+    function isValidMenuPoll(data) {
+      return data.keys().hasAll(['id', 'title', 'options', 'deadline', 'showResultsAfterVote', 'isClosed', 'createdAt', 'updatedAt', 'createdBy'])
+        && data.keys().hasOnly(['id', 'title', 'description', 'options', 'deadline', 'showResultsAfterVote', 'isClosed', 'managerUids', 'readerUids', 'createdAt', 'updatedAt', 'createdBy'])
+        && isValidStr(data.id, 1, 128)
+        && isValidStr(data.title, 1, 160)
+        && (!('description' in data) || isValidStr(data.description, 0, 500))
+        && data.options is list && data.options.size() >= 2 && data.options.size() <= 10 && data.options[0] is string
+        && isValidStr(data.deadline, 8, 32)
+        && data.showResultsAfterVote is bool
+        && data.isClosed is bool
+        && (!('managerUids' in data) || isBoundedUidList(data.managerUids, 20))
+        && (!('readerUids' in data) || isBoundedUidList(data.readerUids, 50))
+        && isValidStr(data.createdAt, 1, 64)
+        && isValidStr(data.updatedAt, 1, 64)
+        && isValidStr(data.createdBy, 1, 128);
+    }
+
+    function isValidMenuVote(data) {
+      return data.keys().hasAll(['id', 'pollId', 'uid', 'memberName', 'optionIndex', 'optionLabel', 'createdAt'])
+        && data.keys().hasOnly(['id', 'pollId', 'uid', 'memberId', 'memberName', 'optionIndex', 'optionLabel', 'readerUids', 'managerUids', 'createdAt'])
+        && isValidStr(data.id, 1, 260)
+        && isValidStr(data.pollId, 1, 128)
+        && isValidStr(data.uid, 1, 128)
+        && (!('memberId' in data) || isValidStr(data.memberId, 0, 128))
+        && isValidStr(data.memberName, 1, 120)
+        && data.optionIndex is number && data.optionIndex >= 0 && data.optionIndex <= 9
+        && isValidStr(data.optionLabel, 1, 120)
+        && (!('readerUids' in data) || isBoundedUidList(data.readerUids, 50))
+        && (!('managerUids' in data) || isBoundedUidList(data.managerUids, 20))
+        && isValidStr(data.createdAt, 1, 64);
+    }
+
+    function isValidAppNotification(data) {
+      return data.keys().hasAll(['id', 'targetUid', 'type', 'title', 'body', 'readByUids', 'createdAt', 'createdBy'])
+        && data.keys().hasOnly(['id', 'targetUid', 'type', 'title', 'body', 'readByUids', 'readerUids', 'managerUids', 'createdAt', 'createdBy'])
+        && isValidStr(data.id, 1, 128)
+        && isValidStr(data.targetUid, 1, 128)
+        && isValidStr(data.type, 1, 40)
+        && isValidStr(data.title, 1, 160)
+        && isValidStr(data.body, 1, 600)
+        && isBoundedUidList(data.readByUids, 50)
+        && (!('readerUids' in data) || isBoundedUidList(data.readerUids, 50))
+        && (!('managerUids' in data) || isBoundedUidList(data.managerUids, 20))
+        && isValidStr(data.createdAt, 1, 64)
+        && isValidStr(data.createdBy, 1, 128);
+    }
+
+    // ------------------------------------------------------------------
+    // Collection Rules
+    // ------------------------------------------------------------------
+
+    match /test/{docId} {
+      allow get: if isSignedIn();
+    }
+
+    match /users/{uid} {
+      allow get: if isVerified() && isValidId(uid) && (request.auth.uid == uid || isManagerOrAdmin());
+      allow list: if isBootstrappedAdmin() || (isVerified() && ('managerUids' in resource.data && request.auth.uid in resource.data.managerUids));
+      allow create: if isVerified() && isValidId(uid) && isValidUserAccount(incoming()) && (
+        (request.auth.uid == uid && incoming().uid == request.auth.uid && (
+          (isBootstrappedAdmin() && incoming().role == 'admin') ||
+          (!isBootstrappedAdmin() && incoming().role == 'member')
+        )) ||
+        isAdmin()
+      );
+      allow update: if isVerified() && isValidId(uid) && isValidUserAccount(incoming())
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && (
+          (isAdmin() && !(existing().email == 'mdraezul96@gmail.com' && incoming().role != 'admin')) ||
+          (request.auth.uid == uid
+            && incoming().role == existing().role
+            && incoming().isActive == existing().isActive
+            && incoming().email == existing().email
+            && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'updatedAt']))
+        );
+      allow delete: if isAdmin() && isValidId(uid) && existing().email != 'mdraezul96@gmail.com';
+    }
+
+    match /messSettings/{messId} {
+      allow get: if isActiveMessUser() && isValidId(messId);
+      allow list: if isBootstrappedAdmin() || (isVerified() && ('readerUids' in resource.data && request.auth.uid in resource.data.readerUids));
+      allow create, update: if isAdmin() && isValidId(messId) && isValidMessSettings(incoming());
+      allow delete: if false;
+    }
+
+    match /rooms/{roomId} {
+      allow get: if isActiveMessUser() && isValidId(roomId);
+      allow list: if isBootstrappedAdmin() || (isVerified() && ('readerUids' in resource.data && request.auth.uid in resource.data.readerUids));
+      allow create: if isManagerOrAdmin() && isValidId(roomId) && isValidRoom(incoming()) && incoming().createdBy == request.auth.uid;
+      allow update: if isManagerOrAdmin() && isValidId(roomId) && isValidRoom(incoming()) && incoming().createdBy == existing().createdBy && incoming().createdAt == existing().createdAt;
+      allow delete: if isAdmin() && isValidId(roomId);
+    }
+
+    match /members/{memberId} {
+      allow get: if isVerified() && isValidId(memberId) && (isManagerOrAdmin() || existing().linkedUid == request.auth.uid);
+      allow list: if isBootstrappedAdmin() || (isVerified() && (
+        ('managerUids' in resource.data && request.auth.uid in resource.data.managerUids) ||
+        ('linkedUid' in resource.data && resource.data.linkedUid == request.auth.uid)
+      ));
+      allow create: if isManagerOrAdmin() && isValidId(memberId) && isValidMember(incoming()) && incoming().createdBy == request.auth.uid;
+      allow update: if isManagerOrAdmin() && isValidId(memberId) && isValidMember(incoming()) && incoming().createdBy == existing().createdBy && incoming().createdAt == existing().createdAt;
+      allow delete: if isAdmin() && isValidId(memberId);
+    }
+
+    match /mealEntries/{entryId} {
+      allow get: if isActiveMessUser() && isValidId(entryId);
+      allow list: if isBootstrappedAdmin() || (isVerified() && (
+        ('readerUids' in resource.data && request.auth.uid in resource.data.readerUids) ||
+        ('memberUid' in resource.data && resource.data.memberUid == request.auth.uid)
+      ));
+      allow create: if isManagerOrAdmin() && isValidId(entryId) && isValidMealEntry(incoming()) && incoming().createdBy == request.auth.uid;
+      allow update: if isManagerOrAdmin() && isValidId(entryId) && isValidMealEntry(incoming()) && incoming().createdBy == existing().createdBy && incoming().createdAt == existing().createdAt
+        && (!existing().isLocked || isAdmin());
+      allow delete: if isAdmin() && isValidId(entryId);
+    }
+
+    match /expenses/{expenseId} {
+      allow get: if isActiveMessUser() && isValidId(expenseId);
+      allow list: if isBootstrappedAdmin() || (isVerified() && ('readerUids' in resource.data && request.auth.uid in resource.data.readerUids));
+      allow create: if isManagerOrAdmin() && isValidId(expenseId) && isValidExpense(incoming()) && incoming().createdBy == request.auth.uid;
+      allow update: if isManagerOrAdmin() && isValidId(expenseId) && isValidExpense(incoming()) && incoming().createdBy == existing().createdBy && incoming().createdAt == existing().createdAt;
+      allow delete: if isAdmin() && isValidId(expenseId);
+    }
+
+    match /payments/{paymentId} {
+      allow get: if isVerified() && isValidId(paymentId) && (isManagerOrAdmin() || existing().memberUid == request.auth.uid);
+      allow list: if isBootstrappedAdmin() || (isVerified() && (
+        ('managerUids' in resource.data && request.auth.uid in resource.data.managerUids) ||
+        ('memberUid' in resource.data && resource.data.memberUid == request.auth.uid)
+      ));
+      allow create: if isManagerOrAdmin() && isValidId(paymentId) && isValidPayment(incoming()) && incoming().createdBy == request.auth.uid;
+      allow update: if isManagerOrAdmin() && isValidId(paymentId) && isValidPayment(incoming()) && incoming().createdBy == existing().createdBy && incoming().createdAt == existing().createdAt;
+      allow delete: if isAdmin() && isValidId(paymentId);
+    }
+
+    match /monthlyClosings/{monthKey} {
+      allow get: if isActiveMessUser() && isValidId(monthKey);
+      allow list: if isBootstrappedAdmin() || (isVerified() && ('readerUids' in resource.data && request.auth.uid in resource.data.readerUids));
+      allow create: if isManagerOrAdmin() && isValidId(monthKey) && isValidMonthlyClosing(incoming());
+      allow update: if isValidId(monthKey) && isValidMonthlyClosing(incoming()) && (isAdmin() || (isManagerOrAdmin() && !existing().isClosed));
+      allow delete: if false;
+    }
+
+    match /monthlyBills/{billId} {
+      allow get: if isVerified() && isValidId(billId) && (isManagerOrAdmin() || existing().memberUid == request.auth.uid);
+      allow list: if isBootstrappedAdmin() || (isVerified() && (
+        ('managerUids' in resource.data && request.auth.uid in resource.data.managerUids) ||
+        ('memberUid' in resource.data && resource.data.memberUid == request.auth.uid)
+      ));
+      allow create: if isManagerOrAdmin() && isValidId(billId) && isValidMonthlyBill(incoming());
+      allow update: if isValidId(billId) && isValidMonthlyBill(incoming()) && (isAdmin() || (isManagerOrAdmin() && !existing().isLocked));
+      allow delete: if isAdmin() && isValidId(billId);
+    }
+
+    match /guests/{guestId} {
+      allow get: if isManagerOrAdmin() && isValidId(guestId);
+      allow list: if isBootstrappedAdmin() || (isVerified() && ('managerUids' in resource.data && request.auth.uid in resource.data.managerUids));
+      allow create: if isManagerOrAdmin() && isValidId(guestId) && isValidGuest(incoming()) && incoming().createdBy == request.auth.uid;
+      allow update: if isManagerOrAdmin() && isValidId(guestId) && isValidGuest(incoming()) && incoming().createdBy == existing().createdBy && incoming().createdAt == existing().createdAt;
+      allow delete: if isAdmin() && isValidId(guestId);
+    }
+
+    match /guestPayments/{paymentId} {
+      allow get: if isManagerOrAdmin() && isValidId(paymentId);
+      allow list: if isBootstrappedAdmin() || (isVerified() && ('managerUids' in resource.data && request.auth.uid in resource.data.managerUids));
+      allow create: if isManagerOrAdmin() && isValidId(paymentId) && isValidGuestPayment(incoming()) && incoming().createdBy == request.auth.uid;
+      allow update: if isAdmin() && isValidId(paymentId) && isValidGuestPayment(incoming());
+      allow delete: if isAdmin() && isValidId(paymentId);
+    }
+
+    match /weeklyMenus/{dayId} {
+      allow get: if isActiveMessUser() && isValidId(dayId);
+      allow list: if isBootstrappedAdmin() || (isVerified() && ('readerUids' in resource.data && request.auth.uid in resource.data.readerUids));
+      allow create, update: if isManagerOrAdmin() && isValidId(dayId) && isValidWeeklyMenu(incoming());
+      allow delete: if isAdmin() && isValidId(dayId);
+    }
+
+    match /notices/{noticeId} {
+      allow get: if isActiveMessUser() && isValidId(noticeId);
+      allow list: if isBootstrappedAdmin() || (isVerified() && ('readerUids' in resource.data && request.auth.uid in resource.data.readerUids));
+      allow create: if isManagerOrAdmin() && isValidId(noticeId) && isValidNotice(incoming()) && incoming().createdBy == request.auth.uid;
+      allow update: if isManagerOrAdmin() && isValidId(noticeId) && isValidNotice(incoming()) && incoming().createdBy == existing().createdBy && incoming().createdAt == existing().createdAt;
+      allow delete: if isManagerOrAdmin() && isValidId(noticeId);
+    }
+
+    match /auditLogs/{logId} {
+      allow get: if isManagerOrAdmin() && isValidId(logId);
+      allow list: if isBootstrappedAdmin() || (isVerified() && ('managerUids' in resource.data && request.auth.uid in resource.data.managerUids));
+      allow create: if isManagerOrAdmin() && isValidId(logId) && isValidAuditLog(incoming()) && incoming().actorUid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    match /syncConflicts/{conflictId} {
+      allow get: if isManagerOrAdmin() && isValidId(conflictId);
+      allow list: if isBootstrappedAdmin() || (isVerified() && ('managerUids' in resource.data && request.auth.uid in resource.data.managerUids));
+      allow create: if isManagerOrAdmin() && isValidId(conflictId) && isValidSyncConflict(incoming()) && incoming().detectedBy == request.auth.uid;
+      allow update: if isAdmin() && isValidId(conflictId) && isValidSyncConflict(incoming());
+      allow delete: if isAdmin() && isValidId(conflictId);
+    }
+
+    // ------------------------------------------------------------------
+    // Member App Collections
+    // ------------------------------------------------------------------
+
+    // Meal On/Off Requests
+    match /mealRequests/{requestId} {
+      allow get: if isVerified() && isValidId(requestId) && (isManagerOrAdmin() || existing().memberUid == request.auth.uid);
+      allow list: if isBootstrappedAdmin() || (isVerified() && (
+        ('managerUids' in resource.data && request.auth.uid in resource.data.managerUids) ||
+        resource.data.memberUid == request.auth.uid
+      ));
+      allow create: if isActiveMessUser() && isValidId(requestId) && isValidMealRequest(incoming())
+        && incoming().memberUid == request.auth.uid
+        && incoming().status == 'pending';
+      allow update: if isVerified() && isValidId(requestId) && isValidMealRequest(incoming())
+        && incoming().memberUid == existing().memberUid
+        && incoming().createdAt == existing().createdAt
+        && (
+          isManagerOrAdmin() ||
+          (existing().memberUid == request.auth.uid && existing().status == 'pending' && incoming().status == 'pending')
+        );
+      allow delete: if isAdmin() && isValidId(requestId);
+    }
+
+    // Payment Verification Requests (Balance updates ONLY when Owner/Manager approves)
+    match /paymentRequests/{requestId} {
+      allow get: if isVerified() && isValidId(requestId) && (isManagerOrAdmin() || existing().memberUid == request.auth.uid);
+      allow list: if isBootstrappedAdmin() || (isVerified() && (
+        ('managerUids' in resource.data && request.auth.uid in resource.data.managerUids) ||
+        resource.data.memberUid == request.auth.uid
+      ));
+      allow create: if isActiveMessUser() && isValidId(requestId) && isValidPaymentRequest(incoming())
+        && incoming().memberUid == request.auth.uid
+        && incoming().status == 'pending';
+      allow update: if isManagerOrAdmin() && isValidId(requestId) && isValidPaymentRequest(incoming())
+        && incoming().memberUid == existing().memberUid
+        && incoming().createdAt == existing().createdAt;
+      allow delete: if isAdmin() && isValidId(requestId);
+    }
+
+    // Guest Meal Requests
+    match /guestMealRequests/{requestId} {
+      allow get: if isVerified() && isValidId(requestId) && (isManagerOrAdmin() || existing().memberUid == request.auth.uid);
+      allow list: if isBootstrappedAdmin() || (isVerified() && (
+        ('managerUids' in resource.data && request.auth.uid in resource.data.managerUids) ||
+        resource.data.memberUid == request.auth.uid
+      ));
+      allow create: if isActiveMessUser() && isValidId(requestId) && isValidGuestMealRequest(incoming())
+        && incoming().memberUid == request.auth.uid
+        && incoming().status == 'pending';
+      allow update: if isManagerOrAdmin() && isValidId(requestId) && isValidGuestMealRequest(incoming())
+        && incoming().memberUid == existing().memberUid
+        && incoming().createdAt == existing().createdAt;
+      allow delete: if isAdmin() && isValidId(requestId);
+    }
+
+    // Private Complaints & Suggestions (Strictly isolated to submitter + Owner/Manager)
+    match /complaints/{complaintId} {
+      allow get: if isVerified() && isValidId(complaintId) && (isManagerOrAdmin() || existing().memberUid == request.auth.uid);
+      allow list: if isBootstrappedAdmin() || (isVerified() && (
+        ('managerUids' in resource.data && request.auth.uid in resource.data.managerUids) ||
+        resource.data.memberUid == request.auth.uid
+      ));
+      allow create: if isActiveMessUser() && isValidId(complaintId) && isValidComplaint(incoming())
+        && incoming().memberUid == request.auth.uid
+        && incoming().status == 'pending';
+      allow update: if isManagerOrAdmin() && isValidId(complaintId) && isValidComplaint(incoming())
+        && incoming().memberUid == existing().memberUid
+        && incoming().createdAt == existing().createdAt;
+      allow delete: if isAdmin() && isValidId(complaintId);
+    }
+
+    // Menu Polls
+    match /menuPolls/{pollId} {
+      allow get: if isActiveMessUser() && isValidId(pollId);
+      allow list: if isBootstrappedAdmin() || (isVerified() && ('readerUids' in resource.data && request.auth.uid in resource.data.readerUids));
+      allow create: if isManagerOrAdmin() && isValidId(pollId) && isValidMenuPoll(incoming()) && incoming().createdBy == request.auth.uid;
+      allow update: if isManagerOrAdmin() && isValidId(pollId) && isValidMenuPoll(incoming()) && incoming().createdBy == existing().createdBy && incoming().createdAt == existing().createdAt;
+      allow delete: if isAdmin() && isValidId(pollId);
+    }
+
+    // Menu Votes (Deterministic ID `${pollId}_${uid}` enforces 1 vote per member)
+    match /menuVotes/{voteId} {
+      allow get: if isActiveMessUser() && isValidId(voteId);
+      allow list: if isBootstrappedAdmin() || (isVerified() && (
+        ('readerUids' in resource.data && request.auth.uid in resource.data.readerUids) ||
+        resource.data.uid == request.auth.uid
+      ));
+      allow create: if isActiveMessUser() && isValidId(voteId) && isValidMenuVote(incoming())
+        && incoming().uid == request.auth.uid
+        && voteId == (incoming().pollId + '_' + request.auth.uid);
+      allow update: if false;
+      allow delete: if isAdmin() && isValidId(voteId);
+    }
+
+    // Notifications (In-app + PWA)
+    match /notifications/{notifId} {
+      allow get: if isActiveMessUser() && isValidId(notifId) && (isManagerOrAdmin() || existing().targetUid == 'ALL' || existing().targetUid == request.auth.uid);
+      allow list: if isBootstrappedAdmin() || (isVerified() && (
+        ('readerUids' in resource.data && request.auth.uid in resource.data.readerUids) ||
+        resource.data.targetUid == request.auth.uid ||
+        resource.data.targetUid == 'ALL'
+      ));
+      allow create: if isManagerOrAdmin() && isValidId(notifId) && isValidAppNotification(incoming()) && incoming().createdBy == request.auth.uid;
+      allow update: if isActiveMessUser() && isValidId(notifId) && isValidAppNotification(incoming())
+        && incoming().targetUid == existing().targetUid
+        && incoming().title == existing().title
+        && incoming().body == existing().body
+        && incoming().createdAt == existing().createdAt
+        && incoming().diff(existing()).affectedKeys().hasOnly(['readByUids']);
+      allow delete: if isAdmin() && isValidId(notifId);
+    }
+  }
+}
